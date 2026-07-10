@@ -145,18 +145,22 @@
       to { transform: translateX(125vw); }
     }
 
-    /* ---------- 미세먼지 헤이즈 오버레이 ---------- */
+    /* ---------- 미세먼지(황사) 헤이즈 오버레이: PM10 실측값으로 누런 정도를 연속적으로 표현 ---------- */
     #haze-overlay {
       position: fixed;
       inset: 0;
       pointer-events: none;
       z-index: 5;
       opacity: 0;
-      backdrop-filter: blur(1.5px) saturate(75%);
-      background: radial-gradient(ellipse at 50% 20%, rgba(191, 168, 122, 0.16), rgba(120, 110, 95, 0.22));
-      transition: opacity 2s ease;
+      backdrop-filter: blur(calc(var(--dust-intensity, 0) * 3px));
+      background: radial-gradient(
+        ellipse at 50% 20%,
+        rgba(221, 179, 79, 0.82),
+        rgba(199, 158, 68, 0.76) 60%,
+        rgba(168, 132, 58, 0.7)
+      );
+      transition: opacity 2.5s ease, backdrop-filter 2.5s ease;
     }
-    #haze-overlay.active { opacity: 1; }
 
     /* ---------- 레이아웃 ---------- */
     .page {
@@ -619,9 +623,13 @@
       renderSky();
     }
 
-    function applyHazeEffect(khaiGrade) {
-      const hazy = khaiGrade === "나쁨" || khaiGrade === "매우나쁨";
-      document.getElementById("haze-overlay").classList.toggle("active", hazy);
+    function applyHazeEffect(pm10) {
+      // 별도 황사 특보 API 없이, 이미 받아오는 PM10 실측값으로 뿌옇게 표현.
+      // 60㎍/㎥부터 서서히 끼기 시작해 180㎍/㎥ 이상이면 최대 강도.
+      const intensity = Math.max(0, Math.min(1, (pm10 - 60) / 120));
+      const overlay = document.getElementById("haze-overlay");
+      overlay.style.setProperty("--dust-intensity", intensity);
+      overlay.style.opacity = intensity;
     }
 
     updateClock();
@@ -712,7 +720,7 @@
           `PM10 ${a.pm10}㎍/㎥ · PM2.5 ${a.pm25}㎍/㎥`,
           a.mock
         );
-        applyHazeEffect(a.khai_grade);
+        applyHazeEffect(a.pm10);
       } catch (e) {
         setCardError("card-air");
       }
