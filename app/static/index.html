@@ -8,8 +8,11 @@
     :root {
       --bg-0: #0b0e13;
       --bg-1: #12161d;
-      --card-bg: rgba(255, 255, 255, 0.045);
-      --card-border: rgba(255, 255, 255, 0.08);
+      --sky-top: #12161d;
+      --sky-mid: #12161d;
+      --sky-bottom: #0b0e13;
+      --card-bg: rgba(9, 12, 18, 0.55);
+      --card-border: rgba(255, 255, 255, 0.1);
       --text-main: #f0f2f5;
       --text-dim: #8b95a5;
       --accent-blue: #6fa8ff;
@@ -26,41 +29,23 @@
     body {
       margin: 0;
       font-family: "Malgun Gothic", "Pretendard", sans-serif;
-      background:
-        radial-gradient(ellipse 120% 80% at 20% -10%, #1c2433 0%, transparent 55%),
-        radial-gradient(ellipse 100% 70% at 100% 110%, #1a1f2e 0%, transparent 50%),
-        linear-gradient(180deg, var(--bg-1), var(--bg-0));
+      background: linear-gradient(180deg, var(--sky-top), var(--sky-mid) 55%, var(--sky-bottom));
       color: var(--text-main);
       min-height: 100vh;
       overflow-x: hidden;
       position: relative;
-      transition: background 1.2s ease;
+      transition: background 3s linear;
     }
 
-    /* ---------- 날씨별 배경 씬 ---------- */
-    body[data-scene="clear"] {
-      background:
-        radial-gradient(ellipse 70% 55% at 78% -8%, rgba(255, 205, 120, 0.28) 0%, transparent 60%),
-        radial-gradient(ellipse 100% 70% at 100% 110%, #202536 0%, transparent 50%),
-        linear-gradient(180deg, #1a1f2c, #0d1016);
-    }
-    body[data-scene="partly-cloudy"] {
-      background:
-        radial-gradient(ellipse 90% 60% at 30% -10%, rgba(160, 175, 200, 0.18) 0%, transparent 55%),
-        linear-gradient(180deg, #171b24, #0b0e13);
-    }
-    body[data-scene="cloudy"] {
-      background: linear-gradient(180deg, #15181f, #090b0f);
-    }
-    body[data-scene="rain"] {
-      background:
-        radial-gradient(ellipse 120% 80% at 20% -10%, #182130 0%, transparent 55%),
-        linear-gradient(180deg, #0f131a, #07090c);
-    }
-    body[data-scene="snow"] {
-      background:
-        radial-gradient(ellipse 120% 80% at 50% -10%, rgba(185, 205, 235, 0.14) 0%, transparent 55%),
-        linear-gradient(180deg, #161c27, #0a0d13);
+    /* ---------- 시간대(하늘) 배경 위에 덮이는 날씨 어둡기 오버레이 ---------- */
+    #weather-dim {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background: #05060a;
+      opacity: 0;
+      transition: opacity 2s ease;
     }
 
     /* ---------- 배경 날씨 효과 ---------- */
@@ -69,7 +54,7 @@
       inset: 0;
       pointer-events: none;
       overflow: hidden;
-      z-index: 0;
+      z-index: 1;
     }
 
     .drop {
@@ -103,36 +88,36 @@
       to { transform: translateY(115vh) translateX(var(--drift, 0px)); }
     }
 
-    /* 맑음: 반짝이는 별빛 + 은은한 햇살 */
+    /* 해/달: 시간대(낮/밤) + 날씨 씬에 따라 JS가 opacity·색·위치를 계산해서 인라인으로 반영 */
     .sun-glow {
       position: absolute;
-      top: -12%;
       right: -6%;
       width: 42vw;
       height: 42vw;
       max-width: 480px;
       max-height: 480px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(255, 213, 140, 0.32), transparent 72%);
       filter: blur(6px);
       opacity: 0;
-      transition: opacity 1.5s ease;
+      transition: opacity 2.5s ease, top 3s linear, background 3s linear;
     }
-    body[data-scene="clear"] .sun-glow { opacity: 1; }
 
+    /* 별: --star-factor(시간대×씬)를 #weather-fx에서 상속받아 각 별의 --peak와 곱해서 밝기 결정 */
+    #weather-fx {
+      --star-factor: 0;
+    }
     .sparkle {
       position: absolute;
       border-radius: 50%;
       background: radial-gradient(circle, #fff6df, transparent 70%);
-      opacity: 0;
+      opacity: calc(var(--peak, 0.8) * var(--star-factor, 0));
       animation: twinkle ease-in-out infinite;
-      transition: opacity 1.2s;
+      transition: opacity 2.5s ease;
     }
-    body[data-scene="clear"] .sparkle { opacity: var(--peak, 0.8); }
 
     @keyframes twinkle {
-      0%, 100% { opacity: 0.1; }
-      50% { opacity: var(--peak, 0.8); }
+      0%, 100% { opacity: calc(var(--peak, 0.8) * var(--star-factor, 0) * 0.15); }
+      50% { opacity: calc(var(--peak, 0.8) * var(--star-factor, 0)); }
     }
 
     /* 흐림/구름많음: 떠다니는 구름 */
@@ -386,6 +371,7 @@
   </style>
 </head>
 <body>
+  <div id="weather-dim"></div>
   <div id="weather-fx"></div>
   <div id="haze-overlay"></div>
 
@@ -441,16 +427,13 @@
         `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       document.getElementById("date").textContent =
         `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEKDAYS[now.getDay()]}요일`;
+      renderSky();
     }
-    updateClock();
-    setInterval(updateClock, 1000);
 
-    // ---------- 날씨 파티클 배경 ----------
+    // ---------- 날씨 파티클 배경 (전부 로드 시 한 번만 생성, 보이기/숨기기는 opacity로) ----------
     const fx = document.getElementById("weather-fx");
-    let particlesBuilt = { rain: false, snow: false, sparkle: false, cloud: false };
 
     function buildRainDrops(count = 70) {
-      if (particlesBuilt.rain) return;
       for (let i = 0; i < count; i++) {
         const d = document.createElement("div");
         d.className = "drop";
@@ -459,11 +442,9 @@
         d.style.animationDelay = `${-Math.random() * 2}s`;
         fx.appendChild(d);
       }
-      particlesBuilt.rain = true;
     }
 
     function buildSnowFlakes(count = 50) {
-      if (particlesBuilt.snow) return;
       for (let i = 0; i < count; i++) {
         const f = document.createElement("div");
         f.className = "flake";
@@ -476,14 +457,14 @@
         f.style.animationDelay = `${-Math.random() * 6}s`;
         fx.appendChild(f);
       }
-      particlesBuilt.snow = true;
     }
 
+    let sunGlowEl = null;
+
     function buildSparkles(count = 40) {
-      if (particlesBuilt.sparkle) return;
-      const glow = document.createElement("div");
-      glow.className = "sun-glow";
-      fx.appendChild(glow);
+      sunGlowEl = document.createElement("div");
+      sunGlowEl.className = "sun-glow";
+      fx.appendChild(sunGlowEl);
 
       for (let i = 0; i < count; i++) {
         const s = document.createElement("div");
@@ -498,11 +479,9 @@
         s.style.animationDelay = `${-Math.random() * 4}s`;
         fx.appendChild(s);
       }
-      particlesBuilt.sparkle = true;
     }
 
     function buildClouds(count = 5) {
-      if (particlesBuilt.cloud) return;
       for (let i = 0; i < count; i++) {
         const c = document.createElement("div");
         c.className = "cloud";
@@ -514,8 +493,12 @@
         c.style.animationDelay = `${-Math.random() * 60}s`;
         fx.appendChild(c);
       }
-      particlesBuilt.cloud = true;
     }
+
+    buildRainDrops();
+    buildSnowFlakes();
+    buildSparkles();
+    buildClouds();
 
     function computeScene(precipitationType, sky) {
       if (precipitationType.includes("눈")) return "snow";
@@ -525,19 +508,99 @@
       return "clear";
     }
 
-    function applyScene(scene) {
-      if (scene === "rain") buildRainDrops();
-      if (scene === "snow") buildSnowFlakes();
-      if (scene === "clear") buildSparkles();
-      if (scene === "cloudy" || scene === "partly-cloudy") buildClouds();
+    // ---------- 시간대(하늘) 연속 그라디언트: 실제 하루처럼 새벽→일출→낮→노을→밤을 자연스럽게 보간 ----------
+    const SKY_KEYFRAMES = [
+      { hour: 0,    top: "#05070d", mid: "#080b15", bottom: "#0b0e18", glow: "#c3d2ff", glowOpacity: 0.22, glowY: 18, star: 0.9 },
+      { hour: 5,    top: "#0a0e1c", mid: "#131a30", bottom: "#1e2740", glow: "#ffcf9e", glowOpacity: 0.15, glowY: 92, star: 0.7 },
+      { hour: 6.5,  top: "#223058", mid: "#7a5f74", bottom: "#e08a5c", glow: "#ffb37a", glowOpacity: 0.65, glowY: 78, star: 0.12 },
+      { hour: 8.5,  top: "#2b4a78", mid: "#4f7bab", bottom: "#a9c6dd", glow: "#ffe4a8", glowOpacity: 0.55, glowY: 55, star: 0 },
+      { hour: 12,   top: "#1c3a63", mid: "#3f6fa0", bottom: "#bcd6e8", glow: "#fff3d0", glowOpacity: 0.5,  glowY: 16, star: 0 },
+      { hour: 16.5, top: "#22406c", mid: "#5178a0", bottom: "#d9b98a", glow: "#ffdca0", glowOpacity: 0.55, glowY: 45, star: 0 },
+      { hour: 18.5, top: "#2a2350", mid: "#a1517a", bottom: "#f0834f", glow: "#ff9d5c", glowOpacity: 0.7,  glowY: 82, star: 0.1 },
+      { hour: 20,   top: "#12132c", mid: "#2c2650", bottom: "#4a3a5c", glow: "#d98fae", glowOpacity: 0.3,  glowY: 94, star: 0.5 },
+    ];
 
+    function hexToRgb(hex) {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    function rgbToHex([r, g, b]) {
+      return "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+    }
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+    function lerpColor(c1, c2, t) {
+      const a = hexToRgb(c1), b = hexToRgb(c2);
+      return rgbToHex([lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]);
+    }
+
+    function getSkyState(now) {
+      const hourFrac = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+      let i = SKY_KEYFRAMES.length - 1;
+      for (let j = 0; j < SKY_KEYFRAMES.length; j++) {
+        if (SKY_KEYFRAMES[j].hour <= hourFrac) i = j;
+      }
+      const k1 = SKY_KEYFRAMES[i];
+      const k2 = SKY_KEYFRAMES[(i + 1) % SKY_KEYFRAMES.length];
+      const span = ((k2.hour - k1.hour) + 24) % 24 || 24;
+      const progressed = ((hourFrac - k1.hour) + 24) % 24;
+      const t = Math.min(progressed / span, 1);
+
+      return {
+        top: lerpColor(k1.top, k2.top, t),
+        mid: lerpColor(k1.mid, k2.mid, t),
+        bottom: lerpColor(k1.bottom, k2.bottom, t),
+        glow: lerpColor(k1.glow, k2.glow, t),
+        glowOpacity: lerp(k1.glowOpacity, k2.glowOpacity, t),
+        glowY: lerp(k1.glowY, k2.glowY, t),
+        star: lerp(k1.star, k2.star, t),
+      };
+    }
+
+    function isNightHour(hourFrac) {
+      return hourFrac < 6.5 || hourFrac >= 18.5;
+    }
+
+    // 날씨 씬이 하늘(해/달/별)을 얼마나 가리는지, 전체적으로 얼마나 어둡게 덮는지
+    const SCENE_SKY_FACTOR = { clear: 1, "partly-cloudy": 0.6, cloudy: 0.15, rain: 0.1, snow: 0.25 };
+    const SCENE_DIM = { clear: 0, "partly-cloudy": 0.12, cloudy: 0.28, rain: 0.35, snow: 0.15 };
+
+    let currentScene = "clear";
+
+    function renderSky() {
+      const now = new Date();
+      const state = getSkyState(now);
+      const factor = SCENE_SKY_FACTOR[currentScene] ?? 1;
+
+      document.body.style.setProperty("--sky-top", state.top);
+      document.body.style.setProperty("--sky-mid", state.mid);
+      document.body.style.setProperty("--sky-bottom", state.bottom);
+
+      fx.style.setProperty("--star-factor", state.star * factor);
+
+      if (sunGlowEl) {
+        sunGlowEl.style.opacity = state.glowOpacity * factor;
+        sunGlowEl.style.top = `${state.glowY - 15}%`;
+        sunGlowEl.style.background = `radial-gradient(circle, ${state.glow}55, transparent 72%)`;
+      }
+
+      document.getElementById("weather-dim").style.opacity = SCENE_DIM[currentScene] ?? 0;
+    }
+
+    function applyScene(scene) {
+      currentScene = scene;
       document.body.dataset.scene = scene;
+      renderSky();
     }
 
     function applyHazeEffect(khaiGrade) {
       const hazy = khaiGrade === "나쁨" || khaiGrade === "매우나쁨";
       document.getElementById("haze-overlay").classList.toggle("active", hazy);
     }
+
+    updateClock();
+    setInterval(updateClock, 1000);
 
     function setCard(id, mainText, subHtml, mock) {
       const card = document.getElementById(id);
@@ -558,13 +621,18 @@
       return res.json();
     }
 
-    const SCENE_ICONS = {
+    const SCENE_ICONS_STATIC = {
       rain: "🌧️",
       snow: "❄️",
       cloudy: "☁️",
-      "partly-cloudy": "⛅",
-      clear: "☀️",
     };
+
+    // 맑음/구름많음은 그 시각이 낮인지 밤인지에 따라 해/달 아이콘을 다르게 표시
+    function getSceneIcon(scene, hourFrac) {
+      if (scene === "clear") return isNightHour(hourFrac) ? "🌙" : "☀️";
+      if (scene === "partly-cloudy") return isNightHour(hourFrac) ? "☁️" : "⛅";
+      return SCENE_ICONS_STATIC[scene];
+    }
 
     function renderHourly(hourly) {
       const strip = document.querySelector(".hourly-strip");
@@ -574,13 +642,15 @@
       }
       strip.innerHTML = hourly
         .map((h) => {
-          const hourLabel = `${parseInt(h.time.slice(0, 2), 10)}시`;
+          const hour = parseInt(h.time.slice(0, 2), 10);
+          const hourLabel = `${hour}시`;
           const scene = computeScene(h.precipitation_type, h.sky);
+          const icon = getSceneIcon(scene, hour);
           const popHtml = h.precipitation_probability >= 30 ? `<div class="hour-pop">${h.precipitation_probability}%</div>` : "";
           return `
             <div class="hour-item">
               <div class="hour-label">${hourLabel}</div>
-              <div class="hour-icon">${SCENE_ICONS[scene]}</div>
+              <div class="hour-icon">${icon}</div>
               <div class="hour-temp">${Math.round(h.temperature)}°</div>
               ${popHtml}
             </div>`;
@@ -592,7 +662,9 @@
       try {
         const w = await fetchJson("/api/weather");
         const scene = computeScene(w.precipitation_type, w.sky);
-        document.querySelector("#card-weather .icon").textContent = SCENE_ICONS[scene];
+        const now = new Date();
+        const hourFrac = now.getHours() + now.getMinutes() / 60;
+        document.querySelector("#card-weather .icon").textContent = getSceneIcon(scene, hourFrac);
         setCard(
           "card-weather",
           `${w.temperature}°C`,
