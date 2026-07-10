@@ -12,9 +12,11 @@
 - [ ] 5단계: 복약 알림 위젯 (확인 전까지 고정 노출)
 - [ ] 6단계: 학생 시간표 위젯 (SQLite)
 
-## 실행 방법
+## 설치 및 실행
 
 ```bash
+git clone https://github.com/ngcarl1225-ops/entrance-smart-display.git
+cd entrance-smart-display
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
@@ -23,6 +25,18 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 브라우저에서 http://localhost:8000 접속. 헬스체크는 `/health`.
+
+### 업데이트 받기 (git pull)
+
+이미 clone해둔 상태에서 최신 변경사항만 받아오려면:
+
+```bash
+git pull origin main
+pip install -r requirements.txt   # 의존성이 바뀌었을 수 있으니 함께 실행 권장
+```
+
+`.env`는 git으로 관리되지 않으므로(gitignore) pull해도 내 설정값은 그대로 유지된다.
+다만 `.env.example`에 새 항목이 추가된 경우, `git diff HEAD~1 -- .env.example` 등으로 확인해서 `.env`에 수동으로 반영해야 한다.
 
 API 키 발급 전에는 `.env`의 `USE_MOCK_DATA=true` 상태로 아래 엔드포인트가 mock 데이터를 반환한다.
 공공데이터포털에서 키를 받으면 `KMA_SERVICE_KEY` / `AIRKOREA_SERVICE_KEY`를 채우고 `USE_MOCK_DATA=false`로 바꾸면 된다.
