@@ -1,0 +1,87 @@
+rules:
+  # ---------- 강수 (앞으로 6시간 예보 기준, near_term_* 필드는 main.py에서 계산) ----------
+  - id: rain_umbrella
+    field: near_term_max_pop
+    operator: gte
+    value: 60
+    message: "몇 시간 내 비 소식이 있어요, 우산을 챙기세요"
+
+  - id: rain_window
+    field: near_term_max_pop
+    operator: gte
+    value: 60
+    message: "몇 시간 내 비가 올 수 있어요, 창문을 닫아주세요"
+
+  - id: snow_caution
+    field: near_term_has_snow
+    operator: eq
+    value: true
+    message: "몇 시간 내 눈이 올 수 있어요, 길이 미끄러울 수 있으니 조심하세요"
+
+  - id: shower_caution
+    field: near_term_has_shower
+    operator: eq
+    value: true
+    message: "소나기가 갑자기 내릴 수 있어요"
+
+  # ---------- 기온 ----------
+  - id: heatwave
+    field: temperature
+    operator: gte
+    value: 33
+    message: "무더위예요, 물을 충분히 챙기세요"
+
+  - id: icy_road
+    field: temperature
+    operator: lt
+    value: 0
+    message: "빙판길 조심하세요"
+
+  - id: coldwave
+    field: temperature
+    operator: lte
+    value: -12
+    message: "한파예요, 두꺼운 겉옷을 챙기세요"
+
+  # ---------- 습도 ----------
+  - id: dry_air
+    field: humidity
+    operator: lte
+    value: 30
+    message: "공기가 건조해요, 핸드크림/립밤을 챙기세요"
+
+  # ---------- 미세먼지 ----------
+  - id: dust_mask
+    field: khai_grade
+    operator: in
+    value: ["나쁨", "매우나쁨"]
+    message: "마스크를 챙기세요"
+
+  - id: dust_severe
+    field: khai_grade
+    operator: eq
+    value: "매우나쁨"
+    message: "가급적 실외활동을 줄이세요"
+
+  - id: air_good
+    conditions:
+      - field: khai_grade
+        operator: eq
+        value: "좋음"
+      - field: near_term_has_rain
+        operator: eq
+        value: false
+    message: "공기가 맑아요, 환기하기 좋은 날이에요"
+
+  # ---------- 자외선 ----------
+  - id: uv_sunscreen
+    field: uv_grade
+    operator: in
+    value: ["높음", "매우높음"]
+    message: "선크림을 바르세요"
+
+  - id: uv_extreme
+    field: uv_grade
+    operator: in
+    value: ["매우높음", "위험"]
+    message: "모자나 양산도 함께 챙기세요"

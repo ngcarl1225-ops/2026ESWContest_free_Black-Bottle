@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>현관 스마트 비서</title>
+  <style>
+    :root {
+      --bg-0: #0b0e13;
+      --bg-1: #12161d;
+      --card-bg: rgba(255, 255, 255, 0.045);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f0f2f5;
+      --text-dim: #8b95a5;
+      --accent-blue: #6fa8ff;
+      --accent-amber: #f2b95c;
+      --accent-dust: #d9a06a;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Malgun Gothic", "Pretendard", sans-serif;
+      background:
+        radial-gradient(ellipse 120% 80% at 20% -10%, #1c2433 0%, transparent 55%),
+        radial-gradient(ellipse 100% 70% at 100% 110%, #1a1f2e 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg-1), var(--bg-0));
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+      transition: background 1.2s ease;
+    }
+
+    /* ---------- 날씨별 배경 씬 ---------- */
+    body[data-scene="clear"] {
+      background:
+        radial-gradient(ellipse 70% 55% at 78% -8%, rgba(255, 205, 120, 0.28) 0%, transparent 60%),
+        radial-gradient(ellipse 100% 70% at 100% 110%, #202536 0%, transparent 50%),
+        linear-gradient(180deg, #1a1f2c, #0d1016);
+    }
+    body[data-scene="partly-cloudy"] {
+      background:
+        radial-gradient(ellipse 90% 60% at 30% -10%, rgba(160, 175, 200, 0.18) 0%, transparent 55%),
+        linear-gradient(180deg, #171b24, #0b0e13);
+    }
+    body[data-scene="cloudy"] {
+      background: linear-gradient(180deg, #15181f, #090b0f);
+    }
+    body[data-scene="rain"] {
+      background:
+        radial-gradient(ellipse 120% 80% at 20% -10%, #182130 0%, transparent 55%),
+        linear-gradient(180deg, #0f131a, #07090c);
+    }
+    body[data-scene="snow"] {
+      background:
+        radial-gradient(ellipse 120% 80% at 50% -10%, rgba(185, 205, 235, 0.14) 0%, transparent 55%),
+        linear-gradient(180deg, #161c27, #0a0d13);
+    }
+
+    /* ---------- 배경 날씨 효과 ---------- */
+    #weather-fx {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    .drop {
+      position: absolute;
+      top: -10%;
+      width: 1.5px;
+      height: 55px;
+      background: linear-gradient(to bottom, transparent, rgba(150, 190, 255, 0.55));
+      opacity: 0;
+      animation: fall-rain linear infinite;
+      transition: opacity 0.8s;
+    }
+    body[data-scene="rain"] .drop { opacity: 1; }
+
+    @keyframes fall-rain {
+      to { transform: translateY(115vh); }
+    }
+
+    .flake {
+      position: absolute;
+      top: -6%;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.9);
+      opacity: 0;
+      animation: fall-snow linear infinite;
+      transition: opacity 0.8s;
+    }
+    body[data-scene="snow"] .flake { opacity: 0.9; }
+
+    @keyframes fall-snow {
+      to { transform: translateY(115vh) translateX(var(--drift, 0px)); }
+    }
+
+    /* 맑음: 반짝이는 별빛 + 은은한 햇살 */
+    .sun-glow {
+      position: absolute;
+      top: -12%;
+      right: -6%;
+      width: 42vw;
+      height: 42vw;
+      max-width: 480px;
+      max-height: 480px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 213, 140, 0.32), transparent 72%);
+      filter: blur(6px);
+      opacity: 0;
+      transition: opacity 1.5s ease;
+    }
+    body[data-scene="clear"] .sun-glow { opacity: 1; }
+
+    .sparkle {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle, #fff6df, transparent 70%);
+      opacity: 0;
+      animation: twinkle ease-in-out infinite;
+      transition: opacity 1.2s;
+    }
+    body[data-scene="clear"] .sparkle { opacity: var(--peak, 0.8); }
+
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.1; }
+      50% { opacity: var(--peak, 0.8); }
+    }
+
+    /* 흐림/구름많음: 떠다니는 구름 */
+    .cloud {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(200, 210, 225, 0.22);
+      filter: blur(18px);
+      opacity: 0;
+      animation: drift-cloud linear infinite;
+      transition: opacity 1.5s;
+    }
+    body[data-scene="cloudy"] .cloud { opacity: 1; }
+    body[data-scene="partly-cloudy"] .cloud { opacity: 0.6; }
+
+    @keyframes drift-cloud {
+      from { transform: translateX(-20vw); }
+      to { transform: translateX(120vw); }
+    }
+
+    /* ---------- 미세먼지 헤이즈 오버레이 ---------- */
+    #haze-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      opacity: 0;
+      backdrop-filter: blur(1.5px) saturate(75%);
+      background: radial-gradient(ellipse at 50% 20%, rgba(191, 168, 122, 0.16), rgba(120, 110, 95, 0.22));
+      transition: opacity 2s ease;
+    }
+    #haze-overlay.active { opacity: 1; }
+
+    /* ---------- 레이아웃 ---------- */
+    .page {
+      position: relative;
+      z-index: 2;
+      padding: clamp(20px, 3vw, 44px);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: clamp(24px, 3vh, 40px);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: clamp(1.2rem, 2vw, 1.7rem);
+      font-weight: 400;
+      margin: 0;
+      color: var(--text-dim);
+      letter-spacing: 0.02em;
+    }
+
+    .time-block {
+      text-align: right;
+    }
+
+    #clock {
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      line-height: 1.1;
+    }
+
+    #date {
+      font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: clamp(14px, 1.6vw, 22px);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: clamp(20px, 2.2vw, 28px);
+      min-height: 150px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--accent-blue);
+      opacity: 0.7;
+    }
+    .card.air::before { background: var(--accent-dust); }
+    .card.uv::before { background: var(--accent-amber); }
+
+    .card h2 {
+      font-size: clamp(0.85rem, 1.2vw, 1rem);
+      font-weight: 400;
+      color: var(--text-dim);
+      margin: 0 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card .icon { font-size: 1.1em; }
+
+    .card .main-value {
+      font-size: clamp(2rem, 3.6vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .card .sub-value {
+      font-size: clamp(0.85rem, 1.2vw, 1rem);
+      color: var(--text-dim);
+      margin-top: 10px;
+      line-height: 1.7;
+    }
+
+    .card.notifications,
+    .card.forecast {
+      grid-column: 1 / -1;
+    }
+
+    .hourly-strip {
+      display: flex;
+      gap: clamp(6px, 1vw, 14px);
+    }
+
+    .hour-item {
+      flex: 1 1 0;
+      min-width: 0;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 4px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .hour-item .hour-label {
+      font-size: clamp(0.75rem, 1vw, 0.9rem);
+      color: var(--text-dim);
+    }
+
+    .hour-item .hour-icon {
+      font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+    }
+
+    .hour-item .hour-temp {
+      font-size: clamp(1rem, 1.6vw, 1.3rem);
+      font-weight: 600;
+    }
+
+    .hour-item .hour-pop {
+      font-size: clamp(0.7rem, 0.95vw, 0.85rem);
+      color: var(--accent-blue);
+    }
+
+    .notifications ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .notifications li {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      padding: 12px 22px;
+      font-size: clamp(0.95rem, 1.3vw, 1.15rem);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .notifications .empty {
+      color: #5c6577;
+      font-size: 1rem;
+      border: none;
+      background: none;
+      padding: 4px 0;
+    }
+
+    .mock-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      color: #f2c078;
+      background: rgba(242, 185, 92, 0.14);
+      border: 1px solid rgba(242, 185, 92, 0.3);
+      border-radius: 6px;
+      padding: 3px 8px;
+      margin-left: 10px;
+      vertical-align: middle;
+      font-weight: 500;
+    }
+
+    footer.spacer { flex: 1; }
+
+    /* ---------- 세로(포트레이트) 모니터 대응 ---------- */
+    @media (orientation: portrait) {
+      body {
+        font-size: 1.15em;
+      }
+
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+
+      .time-block { text-align: left; }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card {
+        min-height: 130px;
+      }
+
+      #clock { font-size: clamp(2.2rem, 9vw, 3.4rem); }
+
+      .hourly-strip {
+        overflow-x: auto;
+        justify-content: flex-start;
+      }
+
+      .hour-item {
+        flex: 0 0 auto;
+        min-width: 72px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="weather-fx"></div>
+  <div id="haze-overlay"></div>
+
+  <div class="page">
+    <header>
+      <h1>현관 스마트 비서</h1>
+      <div class="time-block">
+        <div id="clock">--:--</div>
+        <div id="date">-</div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card weather" id="card-weather">
+        <h2><span class="icon">🌤️</span>날씨</h2>
+        <div class="main-value">--</div>
+        <div class="sub-value">불러오는 중...</div>
+      </div>
+
+      <div class="card air" id="card-air">
+        <h2><span class="icon">🌫️</span>미세먼지</h2>
+        <div class="main-value">--</div>
+        <div class="sub-value">불러오는 중...</div>
+      </div>
+
+      <div class="card uv" id="card-uv">
+        <h2><span class="icon">☀️</span>자외선</h2>
+        <div class="main-value">--</div>
+        <div class="sub-value">불러오는 중...</div>
+      </div>
+
+      <div class="card forecast" id="card-forecast">
+        <h2><span class="icon">🕐</span>시간대별 예보</h2>
+        <div class="hourly-strip"></div>
+      </div>
+
+      <div class="card notifications" id="card-notifications">
+        <h2><span class="icon">🔔</span>오늘의 알림</h2>
+        <ul></ul>
+      </div>
+    </div>
+
+    <footer class="spacer"></footer>
+  </div>
+
+  <script>
+    const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+    function updateClock() {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      document.getElementById("clock").textContent =
+        `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      document.getElementById("date").textContent =
+        `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEKDAYS[now.getDay()]}요일`;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ---------- 날씨 파티클 배경 ----------
+    const fx = document.getElementById("weather-fx");
+    let particlesBuilt = { rain: false, snow: false, sparkle: false, cloud: false };
+
+    function buildRainDrops(count = 70) {
+      if (particlesBuilt.rain) return;
+      for (let i = 0; i < count; i++) {
+        const d = document.createElement("div");
+        d.className = "drop";
+        d.style.left = `${Math.random() * 100}%`;
+        d.style.animationDuration = `${0.6 + Math.random() * 0.6}s`;
+        d.style.animationDelay = `${-Math.random() * 2}s`;
+        fx.appendChild(d);
+      }
+      particlesBuilt.rain = true;
+    }
+
+    function buildSnowFlakes(count = 50) {
+      if (particlesBuilt.snow) return;
+      for (let i = 0; i < count; i++) {
+        const f = document.createElement("div");
+        f.className = "flake";
+        const size = 2 + Math.random() * 4;
+        f.style.width = `${size}px`;
+        f.style.height = `${size}px`;
+        f.style.left = `${Math.random() * 100}%`;
+        f.style.setProperty("--drift", `${(Math.random() - 0.5) * 100}px`);
+        f.style.animationDuration = `${4 + Math.random() * 4}s`;
+        f.style.animationDelay = `${-Math.random() * 6}s`;
+        fx.appendChild(f);
+      }
+      particlesBuilt.snow = true;
+    }
+
+    function buildSparkles(count = 40) {
+      if (particlesBuilt.sparkle) return;
+      const glow = document.createElement("div");
+      glow.className = "sun-glow";
+      fx.appendChild(glow);
+
+      for (let i = 0; i < count; i++) {
+        const s = document.createElement("div");
+        s.className = "sparkle";
+        const size = 1.5 + Math.random() * 2.5;
+        s.style.width = `${size}px`;
+        s.style.height = `${size}px`;
+        s.style.left = `${Math.random() * 100}%`;
+        s.style.top = `${Math.random() * 55}%`;
+        s.style.setProperty("--peak", `${0.4 + Math.random() * 0.5}`);
+        s.style.animationDuration = `${2 + Math.random() * 3}s`;
+        s.style.animationDelay = `${-Math.random() * 4}s`;
+        fx.appendChild(s);
+      }
+      particlesBuilt.sparkle = true;
+    }
+
+    function buildClouds(count = 5) {
+      if (particlesBuilt.cloud) return;
+      for (let i = 0; i < count; i++) {
+        const c = document.createElement("div");
+        c.className = "cloud";
+        const size = 18 + Math.random() * 22;
+        c.style.width = `${size}vw`;
+        c.style.height = `${size * 0.4}vw`;
+        c.style.top = `${5 + Math.random() * 30}%`;
+        c.style.animationDuration = `${50 + Math.random() * 40}s`;
+        c.style.animationDelay = `${-Math.random() * 60}s`;
+        fx.appendChild(c);
+      }
+      particlesBuilt.cloud = true;
+    }
+
+    function computeScene(precipitationType, sky) {
+      if (precipitationType.includes("눈")) return "snow";
+      if (precipitationType.includes("비") || precipitationType.includes("소나기")) return "rain";
+      if (sky === "흐림") return "cloudy";
+      if (sky === "구름많음") return "partly-cloudy";
+      return "clear";
+    }
+
+    function applyScene(scene) {
+      if (scene === "rain") buildRainDrops();
+      if (scene === "snow") buildSnowFlakes();
+      if (scene === "clear") buildSparkles();
+      if (scene === "cloudy" || scene === "partly-cloudy") buildClouds();
+
+      document.body.dataset.scene = scene;
+    }
+
+    function applyHazeEffect(khaiGrade) {
+      const hazy = khaiGrade === "나쁨" || khaiGrade === "매우나쁨";
+      document.getElementById("haze-overlay").classList.toggle("active", hazy);
+    }
+
+    function setCard(id, mainText, subHtml, mock) {
+      const card = document.getElementById(id);
+      card.querySelector(".main-value").innerHTML =
+        mainText + (mock ? '<span class="mock-badge">MOCK</span>' : "");
+      card.querySelector(".sub-value").innerHTML = subHtml;
+    }
+
+    function setCardError(id) {
+      const card = document.getElementById(id);
+      card.querySelector(".main-value").textContent = "오류";
+      card.querySelector(".sub-value").textContent = "정보를 불러올 수 없습니다";
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`${url} -> ${res.status}`);
+      return res.json();
+    }
+
+    const SCENE_ICONS = {
+      rain: "🌧️",
+      snow: "❄️",
+      cloudy: "☁️",
+      "partly-cloudy": "⛅",
+      clear: "☀️",
+    };
+
+    function renderHourly(hourly) {
+      const strip = document.querySelector(".hourly-strip");
+      if (!hourly || hourly.length === 0) {
+        strip.innerHTML = '<span style="color:var(--text-dim)">예보 데이터가 없습니다</span>';
+        return;
+      }
+      strip.innerHTML = hourly
+        .map((h) => {
+          const hourLabel = `${parseInt(h.time.slice(0, 2), 10)}시`;
+          const scene = computeScene(h.precipitation_type, h.sky);
+          const popHtml = h.precipitation_probability >= 30 ? `<div class="hour-pop">${h.precipitation_probability}%</div>` : "";
+          return `
+            <div class="hour-item">
+              <div class="hour-label">${hourLabel}</div>
+              <div class="hour-icon">${SCENE_ICONS[scene]}</div>
+              <div class="hour-temp">${Math.round(h.temperature)}°</div>
+              ${popHtml}
+            </div>`;
+        })
+        .join("");
+    }
+
+    async function refreshWeather() {
+      try {
+        const w = await fetchJson("/api/weather");
+        const scene = computeScene(w.precipitation_type, w.sky);
+        document.querySelector("#card-weather .icon").textContent = SCENE_ICONS[scene];
+        setCard(
+          "card-weather",
+          `${w.temperature}°C`,
+          `${w.sky} · 강수확률 ${w.precipitation_probability}% · ${w.precipitation_type}<br>습도 ${w.humidity}%`,
+          w.mock
+        );
+        applyScene(scene);
+        renderHourly(w.hourly);
+      } catch (e) {
+        setCardError("card-weather");
+      }
+    }
+
+    async function refreshAir() {
+      try {
+        const a = await fetchJson("/api/air-quality");
+        setCard(
+          "card-air",
+          a.khai_grade,
+          `PM10 ${a.pm10}㎍/㎥ · PM2.5 ${a.pm25}㎍/㎥`,
+          a.mock
+        );
+        applyHazeEffect(a.khai_grade);
+      } catch (e) {
+        setCardError("card-air");
+      }
+    }
+
+    async function refreshUv() {
+      try {
+        const u = await fetchJson("/api/uv");
+        setCard("card-uv", u.grade, `자외선지수 ${u.uv_index}`, u.mock);
+      } catch (e) {
+        setCardError("card-uv");
+      }
+    }
+
+    const NOTIFICATION_ICONS = {
+      rain_umbrella: "☂️",
+      rain_window: "🪟",
+      snow_caution: "🥶",
+      shower_caution: "☔",
+      heatwave: "🥵",
+      icy_road: "🧊",
+      coldwave: "🧣",
+      dry_air: "💧",
+      dust_mask: "😷",
+      dust_severe: "🚫",
+      air_good: "🌿",
+      uv_sunscreen: "🧴",
+      uv_extreme: "🧢",
+    };
+
+    async function refreshNotifications() {
+      const list = document.querySelector("#card-notifications ul");
+      try {
+        const { notifications } = await fetchJson("/api/notifications");
+        if (notifications.length === 0) {
+          list.innerHTML = '<li class="empty">특별한 알림이 없습니다</li>';
+        } else {
+          list.innerHTML = notifications
+            .map((n) => `<li>${NOTIFICATION_ICONS[n.id] || "•"} ${n.message}</li>`)
+            .join("");
+        }
+      } catch (e) {
+        list.innerHTML = '<li class="empty">알림을 불러올 수 없습니다</li>';
+      }
+    }
+
+    function refreshAll() {
+      refreshWeather();
+      refreshAir();
+      refreshUv();
+      refreshNotifications();
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 5 * 60 * 1000); // 5분마다 갱신
+  </script>
+</body>
+</html>
