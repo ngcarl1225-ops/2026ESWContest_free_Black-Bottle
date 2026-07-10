@@ -105,37 +105,44 @@
     /* 별: --star-factor(시간대×씬)를 #weather-fx에서 상속받아 각 별의 --peak와 곱해서 밝기 결정 */
     #weather-fx {
       --star-factor: 0;
+      --night-factor: 0;
     }
     .sparkle {
       position: absolute;
       border-radius: 50%;
-      background: radial-gradient(circle, #fff6df, transparent 70%);
-      opacity: calc(var(--peak, 0.8) * var(--star-factor, 0));
+      background: #fffdf5;
+      box-shadow: 0 0 4px 1px rgba(255, 253, 245, 0.95), 0 0 9px 2px rgba(255, 246, 223, 0.55);
+      opacity: calc(var(--peak, 0.9) * var(--star-factor, 0));
       animation: twinkle ease-in-out infinite;
       transition: opacity 2.5s ease;
     }
 
     @keyframes twinkle {
-      0%, 100% { opacity: calc(var(--peak, 0.8) * var(--star-factor, 0) * 0.15); }
-      50% { opacity: calc(var(--peak, 0.8) * var(--star-factor, 0)); }
+      0%, 100% { opacity: calc(var(--peak, 0.9) * var(--star-factor, 0) * 0.4); }
+      50% { opacity: calc(var(--peak, 0.9) * var(--star-factor, 0)); }
     }
 
-    /* 흐림/구름많음: 떠다니는 구름 */
+    /* 흐림/구름많음: 뭉게구름 덩어리(puff) 여러 개를 겹쳐 자연스러운 실루엣을 만든 뒤 통째로 드리프트 */
     .cloud {
       position: absolute;
-      border-radius: 50%;
-      background: rgba(200, 210, 225, 0.22);
-      filter: blur(18px);
       opacity: 0;
       animation: drift-cloud linear infinite;
       transition: opacity 1.5s;
     }
-    body[data-scene="cloudy"] .cloud { opacity: 1; }
-    body[data-scene="partly-cloudy"] .cloud { opacity: 0.6; }
+    body[data-scene="cloudy"] .cloud { opacity: 0.95; }
+    body[data-scene="partly-cloudy"] .cloud { opacity: 0.55; }
+
+    .cloud .puff {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.95), rgba(205, 214, 228, 0.5) 65%, transparent 100%);
+      filter: blur(5px) brightness(calc(1 - var(--night-factor, 0) * 0.45));
+      transition: filter 3s linear;
+    }
 
     @keyframes drift-cloud {
-      from { transform: translateX(-20vw); }
-      to { transform: translateX(120vw); }
+      from { transform: translateX(-25vw); }
+      to { transform: translateX(125vw); }
     }
 
     /* ---------- 미세먼지 헤이즈 오버레이 ---------- */
@@ -461,7 +468,7 @@
 
     let sunGlowEl = null;
 
-    function buildSparkles(count = 40) {
+    function buildSparkles(count = 70) {
       sunGlowEl = document.createElement("div");
       sunGlowEl.className = "sun-glow";
       fx.appendChild(sunGlowEl);
@@ -469,28 +476,45 @@
       for (let i = 0; i < count; i++) {
         const s = document.createElement("div");
         s.className = "sparkle";
-        const size = 1.5 + Math.random() * 2.5;
+        // 대부분은 작은 별, 가끔 눈에 띄는 큰 별이 섞이도록
+        const isBright = Math.random() < 0.15;
+        const size = isBright ? 3 + Math.random() * 2 : 1.5 + Math.random() * 1.5;
         s.style.width = `${size}px`;
         s.style.height = `${size}px`;
         s.style.left = `${Math.random() * 100}%`;
-        s.style.top = `${Math.random() * 55}%`;
-        s.style.setProperty("--peak", `${0.4 + Math.random() * 0.5}`);
+        s.style.top = `${Math.random() * 60}%`;
+        s.style.setProperty("--peak", `${isBright ? 0.9 + Math.random() * 0.1 : 0.55 + Math.random() * 0.35}`);
         s.style.animationDuration = `${2 + Math.random() * 3}s`;
         s.style.animationDelay = `${-Math.random() * 4}s`;
         fx.appendChild(s);
       }
     }
 
-    function buildClouds(count = 5) {
+    function buildClouds(count = 6) {
       for (let i = 0; i < count; i++) {
         const c = document.createElement("div");
         c.className = "cloud";
-        const size = 18 + Math.random() * 22;
-        c.style.width = `${size}vw`;
-        c.style.height = `${size * 0.4}vw`;
-        c.style.top = `${5 + Math.random() * 30}%`;
-        c.style.animationDuration = `${50 + Math.random() * 40}s`;
-        c.style.animationDelay = `${-Math.random() * 60}s`;
+        const width = 16 + Math.random() * 22;
+        c.style.width = `${width}vw`;
+        c.style.height = `${width * (0.32 + Math.random() * 0.1)}vw`;
+        c.style.top = `${4 + Math.random() * 28}%`;
+        c.style.animationDuration = `${55 + Math.random() * 45}s`;
+        c.style.animationDelay = `${-Math.random() * 90}s`;
+
+        // 뭉게구름 덩어리 여러 개를 가로로 겹쳐 배치: 가운데는 크고 둥글게, 가장자리는 작게
+        const puffCount = 5 + Math.floor(Math.random() * 3);
+        for (let p = 0; p < puffCount; p++) {
+          const puff = document.createElement("span");
+          puff.className = "puff";
+          const t = puffCount === 1 ? 0.5 : p / (puffCount - 1);
+          const bell = 1 - Math.abs(t - 0.5) * 1.6;
+          const size = 36 + bell * 42 + Math.random() * 12;
+          puff.style.width = `${size}%`;
+          puff.style.height = `${size * 0.85}%`;
+          puff.style.left = `${t * 100 - size / 2 + (Math.random() * 6 - 3)}%`;
+          puff.style.bottom = `${Math.random() * 18}%`;
+          c.appendChild(puff);
+        }
         fx.appendChild(c);
       }
     }
@@ -578,6 +602,7 @@
       document.body.style.setProperty("--sky-bottom", state.bottom);
 
       fx.style.setProperty("--star-factor", state.star * factor);
+      fx.style.setProperty("--night-factor", state.star);
 
       if (sunGlowEl) {
         sunGlowEl.style.opacity = state.glowOpacity * factor;
