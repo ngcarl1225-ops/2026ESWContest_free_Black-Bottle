@@ -33,18 +33,26 @@ async def api_air_quality():
     return await air_quality_service.get_air_quality()
 
 
+RAIN_TYPES = ("비", "비/눈", "소나기")
+SNOW_TYPES = ("눈", "비/눈")
+
+
 def _build_notification_context(weather: dict, uv: dict, air: dict) -> dict:
     # 알림은 "지금 이 순간"이 아니라 앞으로 몇 시간 안에 우산/겉옷이 필요한지를 봐야 하므로,
     # 가장 이른 시간대 하나만 보지 않고 hourly 예보 전체(기본 6시간)를 훑어서 판단한다.
+    # 다만 "지금 실제로 오고 있는지"와 "이따 올 예정인지"는 문구가 달라야 하므로 둘을 구분해서 넘긴다.
     hourly = weather.get("hourly") or [weather]
     near_term_types = {h["precipitation_type"] for h in hourly}
+    is_raining_now = weather["precipitation_type"] in RAIN_TYPES
+    is_snowing_now = weather["precipitation_type"] in SNOW_TYPES
 
     return {
         "precipitation_probability": weather["precipitation_probability"],
         "precipitation_type": weather["precipitation_type"],
-        "near_term_max_pop": max(h["precipitation_probability"] for h in hourly),
-        "near_term_has_rain": any(t in ("비", "비/눈", "소나기") for t in near_term_types),
-        "near_term_has_snow": any(t in ("눈", "비/눈") for t in near_term_types),
+        "is_raining_now": is_raining_now,
+        "is_snowing_now": is_snowing_now,
+        "near_term_has_rain": any(t in RAIN_TYPES for t in near_term_types),
+        "near_term_has_snow": any(t in SNOW_TYPES for t in near_term_types),
         "near_term_has_shower": "소나기" in near_term_types,
         "temperature": weather["temperature"],
         "humidity": weather["humidity"],

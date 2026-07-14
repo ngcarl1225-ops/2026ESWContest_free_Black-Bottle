@@ -1,27 +1,62 @@
 rules:
-  # ---------- 강수 (앞으로 6시간 예보 기준, near_term_* 필드는 main.py에서 계산) ----------
-  - id: rain_umbrella
-    field: near_term_max_pop
-    operator: gte
-    value: 60
-    message: "몇 시간 내 비 소식이 있어요, 우산을 챙기세요"
-
-  - id: rain_window
-    field: near_term_max_pop
-    operator: gte
-    value: 60
-    message: "몇 시간 내 비가 올 수 있어요, 창문을 닫아주세요"
-
-  - id: snow_caution
-    field: near_term_has_snow
+  # ---------- 강수 ----------
+  # "지금 오고 있음"과 "이따 올 예정"은 문구가 달라야 하므로 규칙을 분리 (is_raining_now는 main.py에서 계산)
+  - id: rain_now_umbrella
+    field: is_raining_now
     operator: eq
     value: true
+    message: "지금 비가 오고 있어요, 우산을 챙기세요"
+
+  - id: rain_now_window
+    field: is_raining_now
+    operator: eq
+    value: true
+    message: "지금 비가 오고 있어요, 창문을 닫아주세요"
+
+  - id: rain_soon_umbrella
+    conditions:
+      - field: near_term_has_rain
+        operator: eq
+        value: true
+      - field: is_raining_now
+        operator: eq
+        value: false
+    message: "몇 시간 내 비 소식이 있어요, 우산을 챙기세요"
+
+  - id: rain_soon_window
+    conditions:
+      - field: near_term_has_rain
+        operator: eq
+        value: true
+      - field: is_raining_now
+        operator: eq
+        value: false
+    message: "몇 시간 내 비가 올 수 있어요, 창문을 닫아주세요"
+
+  - id: snow_now_caution
+    field: is_snowing_now
+    operator: eq
+    value: true
+    message: "지금 눈이 오고 있어요, 길이 미끄러우니 조심하세요"
+
+  - id: snow_soon_caution
+    conditions:
+      - field: near_term_has_snow
+        operator: eq
+        value: true
+      - field: is_snowing_now
+        operator: eq
+        value: false
     message: "몇 시간 내 눈이 올 수 있어요, 길이 미끄러울 수 있으니 조심하세요"
 
   - id: shower_caution
-    field: near_term_has_shower
-    operator: eq
-    value: true
+    conditions:
+      - field: near_term_has_shower
+        operator: eq
+        value: true
+      - field: is_raining_now
+        operator: eq
+        value: false
     message: "소나기가 갑자기 내릴 수 있어요"
 
   # ---------- 기온 ----------
