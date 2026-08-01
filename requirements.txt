@@ -4,3 +4,5 @@ python-dotenv==1.0.1
 pydantic-settings==2.7.0
 httpx==0.28.1
 pyyaml==6.0.2
+gpiozero==2.0.1
+lgpio==0.2.2.0
