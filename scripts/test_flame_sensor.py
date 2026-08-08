@@ -1,8 +1,8 @@
 from gpiozero import DigitalInputDevice
 from time import sleep
 
-# GPIO 17번 핀을 입력 핀으로 설정
-sensor = DigitalInputDevice(17)
+# GPIO 4번 핀을 입력 핀으로 설정
+sensor = DigitalInputDevice(4)
 
 print("센서 작동 시작...")
 
