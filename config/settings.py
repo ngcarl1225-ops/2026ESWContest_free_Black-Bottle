@@ -23,6 +23,23 @@ class Settings(BaseSettings):
     # 공공데이터포털 문서의 "생활기상지수 구역코드" 엑셀에서 조회 필요 (기본값: 서울)
     kma_uv_area_no: str = "1100000000"
 
+    # ---------- 화재 감지 ----------
+    # Pi 센서 모듈 -> 백엔드 인증용 공유 토큰. 비워두면 인증 없이 허용(로컬 데모 기본값).
+    fire_token: str = ""
+    # 관리사무소 대시보드의 조치(확인중/119신고/상황종료) 인증 토큰. 비워두면 누구나 허용.
+    fire_admin_token: str = ""
+    # 불꽃+고온 동시 감지(alarm) 후 세대에서 취소가 없으면 관리사무소로 자동 통보되기까지의 초.
+    fire_escalation_seconds: int = 20
+    # 마지막 보고 이후 이 시간(초)이 지나면 센서 오프라인으로 표시.
+    fire_offline_seconds: int = 30
+    # DS18B20 온도가 이 값(℃) 이상이면서 불꽃도 감지되면 화재 경보(alarm)로 판정.
+    fire_temp_threshold_c: float = 50.0
+    # "오경보예요" 취소 후 같은 잔여 신호로 즉시 재경보되지 않도록 무시하는 쿨다운(초).
+    fire_cancel_cooldown_seconds: int = 60
+    # 관리사무소 화면에 미리 등록해둘 세대 목록. "아이디|표시이름" 을 콤마로 구분.
+    # 비워두면 첫 보고 시 자동 등록. 데모에서 그리드가 비어보이지 않도록 기본 3세대를 넣어둔다.
+    fire_units: str = "101-1203|101동 1203호,101-1204|101동 1204호,102-0901|102동 901호"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 

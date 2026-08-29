@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리사무소 화재 모니터링</title>
+  <link rel="stylesheet" as="style" crossorigin
+    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <style>
+    :root {
+      --bg: #0b0e13;
+      --panel: #12161d;
+      --panel-2: #171c25;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #f0f2f5;
+      --dim: #8b95a5;
+      --green: #2ecc71;
+      --amber: #f2b95c;
+      --red: #e53935;
+      --darkred: #b71c1c;
+      --grey: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Noto Color Emoji", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: clamp(16px, 2.5vw, 32px);
+    }
+    h1 { font-size: clamp(1.1rem, 2vw, 1.5rem); font-weight: 600; margin: 0; }
+    h2 {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 28px 0 12px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .conn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--dim);
+    }
+    .conn .dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--grey);
+    }
+    .conn.live .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    #clock { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+    /* ---------- 상단 경보 배너 ---------- */
+    #alarm-banner { display: none; margin-top: 20px; }
+    #alarm-banner.show { display: block; }
+    .alarm-card {
+      background: linear-gradient(180deg, #3a1010, #250909);
+      border: 1px solid var(--red);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      animation: banner-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes banner-pulse {
+      0%, 100% { border-color: rgba(229, 57, 53, 0.55); }
+      50% { border-color: rgba(229, 57, 53, 1); }
+    }
+    .alarm-card .top {
+      display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    }
+    .alarm-card .unit-name { font-size: 1.4rem; font-weight: 700; }
+    .alarm-card .elapsed { color: #ffb3b3; font-variant-numeric: tabular-nums; }
+    .alarm-card .readings { color: var(--dim); margin: 8px 0 14px; font-size: 0.95rem; }
+    .alarm-card .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      font: inherit;
+      font-weight: 600;
+      padding: 10px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .btn:hover { background: #222835; }
+    .btn.primary { background: #c62828; border-color: #e53935; }
+    .btn.primary:hover { background: #d32f2f; }
+    .btn.ghost { background: transparent; }
+
+    .ack-badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(242, 185, 92, 0.16);
+      color: var(--amber);
+      border: 1px solid rgba(242, 185, 92, 0.4);
+    }
+
+    /* ---------- 세대 그리드 ---------- */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 14px;
+    }
+    .unit {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--grey);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .unit.normal { border-left-color: var(--green); }
+    .unit.warning { border-left-color: var(--amber); }
+    .unit.alarm { border-left-color: var(--red); animation: banner-pulse 1.2s ease-in-out infinite; }
+    .unit.escalated { border-left-color: var(--darkred); }
+    .unit.offline { border-left-color: var(--grey); opacity: 0.7; }
+    .unit .name { font-weight: 600; margin-bottom: 10px; }
+    .unit .pill {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+    .pill.normal { background: rgba(46, 204, 113, 0.16); color: var(--green); }
+    .pill.warning { background: rgba(242, 185, 92, 0.16); color: var(--amber); }
+    .pill.alarm { background: rgba(229, 57, 53, 0.2); color: #ff6b6b; }
+    .pill.escalated { background: rgba(183, 28, 28, 0.28); color: #ff8a8a; }
+    .pill.offline { background: rgba(107, 114, 128, 0.2); color: var(--dim); }
+    .unit .temp { font-size: 2rem; font-weight: 700; margin: 10px 0 2px; }
+    .unit .meta { font-size: 0.82rem; color: var(--dim); line-height: 1.6; }
+
+    /* ---------- 이력 테이블 ---------- */
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 520px; }
+    th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { color: var(--dim); font-weight: 500; background: var(--panel); position: sticky; top: 0; }
+    tbody tr:last-child td { border-bottom: none; }
+    td.evt-alarm, td.evt-escalated { color: #ff6b6b; font-weight: 600; }
+    td.evt-cancelled { color: var(--amber); }
+
+    /* ---------- 데모 패널 ---------- */
+    details.demo {
+      margin-top: 28px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: var(--dim);
+    }
+    details.demo summary { cursor: pointer; font-size: 0.85rem; }
+    .demo-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    .demo-row select, .demo-row input {
+      font: inherit; padding: 8px 10px; border-radius: 8px;
+      background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏢 관리사무소 화재 모니터링</h1>
+    <div class="conn" id="conn">
+      <span class="dot"></span><span id="conn-text">연결 중…</span>
+      <span id="clock" style="margin-left:14px;color:var(--text)">--:--:--</span>
+    </div>
+  </header>
+
+  <div id="alarm-banner"></div>
+
+  <h2>세대 현황</h2>
+  <div class="grid" id="grid"></div>
+
+  <h2>이력</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>시각</th><th>세대</th><th>이벤트</th><th>온도</th><th>불꽃</th></tr>
+      </thead>
+      <tbody id="history"></tbody>
+    </table>
+  </div>
+
+  <details class="demo">
+    <summary>발표 데모용 트리거 (실제 센서 없이 상태 주입 · debug 모드에서만 동작)</summary>
+    <div class="demo-row">
+      <input id="demo-unit" value="101-1203" size="14" />
+      <button class="btn" data-sim="warning">주의</button>
+      <button class="btn" data-sim="alarm">화재경보</button>
+      <button class="btn" data-sim="clear">정상 복귀</button>
+      <span id="demo-msg"></span>
+    </div>
+  </details>
+
+  <script>
+    const STATUS_KO = {
+      normal: "정상", warning: "주의", alarm: "화재경보",
+      escalated: "통보됨", offline: "오프라인",
+    };
+    const ACK_KO = { checking: "현장 확인 중", called_119: "119 신고함" };
+    const EVENT_KO = {
+      "status:warning": "주의 감지", "status:alarm": "화재 경보",
+      "status:escalated": "관리사무소 자동 통보", "status:normal": "정상 복귀",
+      "status:offline": "센서 오프라인", cancelled: "세대에서 오경보 취소",
+      "ack:checking": "현장 확인 중", "ack:called_119": "119 신고함",
+      "ack:resolved": "상황 종료",
+    };
+
+    let serverSkewMs = 0;
+    let units = [];
+    let tick = null;
+
+    const $ = (id) => document.getElementById(id);
+    const serverNow = () => Date.now() - serverSkewMs;
+
+    function fmtAgo(iso) {
+      if (!iso) return "보고 없음";
+      const s = Math.max(0, Math.round((serverNow() - new Date(iso).getTime()) / 1000));
+      if (s < 60) return `${s}초 전 보고`;
+      return `${Math.floor(s / 60)}분 ${s % 60}초 전 보고`;
+    }
+    function fmtElapsed(iso) {
+      if (!iso) return "";
+      const s = Math.max(0, Math.round((serverNow() - new Date(iso).getTime()) / 1000));
+      return `경보 발생 ${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, "0")}초 경과`;
+    }
+    function fmtClock() {
+      const d = new Date(serverNow());
+      const p = (n) => String(n).padStart(2, "0");
+      $("clock").textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    }
+
+    // ---- 관리자 토큰 (조치 API 가 401 이면 물어본다) ----
+    function authHeaders() {
+      const t = localStorage.getItem("fireAdminToken");
+      return t ? { "X-Admin-Token": t } : {};
+    }
+    async function postAck(unitId, action) {
+      const res = await fetch("/api/fire/ack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ unit_id: unitId, action }),
+      });
+      if (res.status === 401) {
+        const t = prompt("관리자 토큰을 입력하세요 (.env 의 FIRE_ADMIN_TOKEN)");
+        if (t) { localStorage.setItem("fireAdminToken", t); return postAck(unitId, action); }
+      }
+      return res.ok;
+    }
+
+    // ---- 렌더링 ----
+    let sirenActx = null;
+    function beep() {
+      try {
+        sirenActx = sirenActx || new (window.AudioContext || window.webkitAudioContext)();
+        if (sirenActx.state === "suspended") sirenActx.resume();
+        const o = sirenActx.createOscillator();
+        const g = sirenActx.createGain();
+        o.type = "square";
+        o.frequency.value = 880;
+        g.gain.value = 0.06;
+        o.connect(g).connect(sirenActx.destination);
+        o.start();
+        o.stop(sirenActx.currentTime + 0.25);
+      } catch (e) {}
+    }
+    document.addEventListener("click", () => { try { sirenActx && sirenActx.resume(); } catch (e) {} }, { once: true });
+
+    let prevAlarmIds = new Set();
+    function render() {
+      // 경보 배너
+      const alarming = units.filter((u) => u.status === "alarm" || u.status === "escalated");
+      const banner = $("alarm-banner");
+      banner.classList.toggle("show", alarming.length > 0);
+      banner.innerHTML = alarming.map((u) => {
+        const temp = u.temperature == null ? "-" : u.temperature.toFixed(1);
+        const ack = u.admin_ack ? `<span class="ack-badge">${ACK_KO[u.admin_ack] || u.admin_ack}</span>` : "";
+        return `
+          <div class="alarm-card">
+            <div class="top">
+              <span class="unit-name">🔥 ${u.label}</span>
+              <span class="elapsed" data-elapsed="${u.alarm_since || ""}">${fmtElapsed(u.alarm_since)}</span>
+              ${ack}
+              ${u.status === "escalated" ? '<span class="ack-badge" style="color:#ff8a8a;border-color:#ff8a8a;background:rgba(183,28,28,.25)">자동 통보됨</span>' : ""}
+            </div>
+            <div class="readings">온도 ${temp}°C · 불꽃 ${u.flame ? "감지됨" : "없음"} · 세대 id ${u.unit_id}</div>
+            <div class="actions">
+              <button class="btn" data-ack="checking" data-unit="${u.unit_id}">현장 확인 중</button>
+              <button class="btn primary" data-ack="called_119" data-unit="${u.unit_id}">119 신고함</button>
+              <button class="btn ghost" data-ack="resolved" data-unit="${u.unit_id}">상황 종료</button>
+            </div>
+          </div>`;
+      }).join("");
+
+      // 새 경보가 뜨면 알림음
+      const nowIds = new Set(alarming.map((u) => u.unit_id));
+      for (const id of nowIds) if (!prevAlarmIds.has(id)) beep();
+      prevAlarmIds = nowIds;
+
+      // 세대 그리드
+      $("grid").innerHTML = units.map((u) => {
+        const temp = u.temperature == null ? "--" : `${u.temperature.toFixed(1)}°`;
+        const ack = u.admin_ack ? `<br><span class="ack-badge">${ACK_KO[u.admin_ack] || u.admin_ack}</span>` : "";
+        return `
+          <div class="unit ${u.status}">
+            <div class="name">${u.label}</div>
+            <span class="pill ${u.status}">${STATUS_KO[u.status] || u.status}</span>
+            <div class="temp">${temp}</div>
+            <div class="meta">
+              불꽃 ${u.flame ? "감지됨" : "없음"}<br>
+              <span data-ago="${u.last_report || ""}">${u.status === "offline" ? "오프라인" : fmtAgo(u.last_report)}</span>
+              ${ack}
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    // 배너 경과시간·"N초 전"을 1초마다 갱신
+    function retime() {
+      fmtClock();
+      document.querySelectorAll("[data-elapsed]").forEach((el) => {
+        if (el.dataset.elapsed) el.textContent = fmtElapsed(el.dataset.elapsed);
+      });
+      document.querySelectorAll("[data-ago]").forEach((el) => {
+        const card = el.closest(".unit");
+        if (el.dataset.ago && !(card && card.classList.contains("offline"))) el.textContent = fmtAgo(el.dataset.ago);
+      });
+    }
+
+    document.addEventListener("click", async (e) => {
+      const ackBtn = e.target.closest("[data-ack]");
+      if (ackBtn) {
+        ackBtn.disabled = true;
+        await postAck(ackBtn.dataset.unit, ackBtn.dataset.ack);
+        setTimeout(() => { ackBtn.disabled = false; }, 1000);
+        return;
+      }
+      const simBtn = e.target.closest("[data-sim]");
+      if (simBtn) {
+        const res = await fetch("/api/fire/simulate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ unit_id: $("demo-unit").value.trim(), scenario: simBtn.dataset.sim }),
+        });
+        $("demo-msg").textContent = res.ok ? "적용됨" : `실패 (${res.status})`;
+        setTimeout(() => { $("demo-msg").textContent = ""; }, 2500);
+      }
+    });
+
+    let lastHistoryLoad = 0;
+    async function loadHistory(force) {
+      if (!force && Date.now() - lastHistoryLoad < 5000) return;
+      lastHistoryLoad = Date.now();
+      try {
+        const { events } = await (await fetch("/api/fire/events?limit=60")).json();
+        $("history").innerHTML = events.map((ev) => {
+          const t = new Date(ev.ts);
+          const p = (n) => String(n).padStart(2, "0");
+          const evtKey = (ev.event || "").split(":")[0];
+          const evtLabel = EVENT_KO[ev.event] || ev.event;
+          return `<tr>
+            <td>${p(t.getMonth() + 1)}/${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())}</td>
+            <td>${ev.label || ev.unit_id}</td>
+            <td class="evt-${evtKey === "status" ? (ev.event.split(":")[1]) : evtKey}">${evtLabel}</td>
+            <td>${ev.temperature == null ? "-" : ev.temperature.toFixed(1) + "°"}</td>
+            <td>${ev.flame == null ? "-" : (ev.flame ? "감지" : "없음")}</td>
+          </tr>`;
+        }).join("");
+      } catch (e) {}
+    }
+
+    function ingest(data) {
+      if (data.server_time) serverSkewMs = Date.now() - new Date(data.server_time).getTime();
+      units = (data.units || []).slice().sort((a, b) => a.unit_id.localeCompare(b.unit_id));
+      render();
+    }
+
+    function connect() {
+      const es = new EventSource("/api/fire/stream");
+      es.onopen = () => { $("conn").classList.add("live"); $("conn-text").textContent = "실시간 연결됨"; };
+      es.onmessage = (ev) => {
+        try { ingest(JSON.parse(ev.data)); loadHistory(); } catch (e) {}
+      };
+      es.onerror = () => { $("conn").classList.remove("live"); $("conn-text").textContent = "재연결 중…"; };
+    }
+
+    connect();
+    loadHistory();
+    retime();
+    tick = setInterval(retime, 1000);
+    // 폴백: SSE 가 막혀도 최소한의 갱신
+    setInterval(async () => {
+      try {
+        const r = await fetch("/api/fire/units");
+        if (r.ok) ingest(await r.json());
+      } catch (e) {}
+    }, 8000);
+    setInterval(loadHistory, 20000);
+  </script>
+</body>
+</html>

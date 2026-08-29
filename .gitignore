@@ -4,5 +4,6 @@ __pycache__/
 venv/
 .env
 *.db
+data/
 uvicorn.*.log
 uvicorn.pid

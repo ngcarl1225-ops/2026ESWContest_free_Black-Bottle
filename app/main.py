@@ -1,16 +1,28 @@
 import asyncio
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.fire.router import router as fire_router
+from app.fire.state import manager as fire_manager
 from app.rules import engine as rules_engine
 from app.services import air_quality_service, uv_service, weather_service
 from config.settings import settings
 
-app = FastAPI(title=settings.app_name, debug=settings.debug)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    fire_manager.start()  # 센서 오프라인 감시 루프 시작
+    yield
+    await fire_manager.stop()
+
+
+app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.include_router(fire_router)
 
 
 @app.get("/health")
@@ -75,3 +87,8 @@ async def api_notifications():
 @app.get("/")
 def index():
     return FileResponse("app/static/index.html")
+
+
+@app.get("/admin")
+def admin():
+    return FileResponse("app/static/admin.html")

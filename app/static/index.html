@@ -381,6 +381,69 @@
         min-width: 72px;
       }
     }
+
+    /* ---------- 화재 감지 전체화면 오버레이 ---------- */
+    #fire-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6vmin;
+      color: #fff;
+      font-family: "Pretendard", "Noto Color Emoji", sans-serif;
+    }
+    #fire-overlay.show { display: flex; }
+    #fire-overlay.warning {
+      background: radial-gradient(circle at 50% 32%, #b26a00, #7a3d00 68%, #431f00);
+    }
+    #fire-overlay.alarm,
+    #fire-overlay.escalated {
+      background: radial-gradient(circle at 50% 32%, #e53935, #8e0000 68%, #3f0000);
+    }
+    #fire-overlay.alarm { animation: fire-pulse 1s ease-in-out infinite; }
+    @keyframes fire-pulse {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.28); }
+    }
+    #fire-overlay .fo-icon { font-size: 20vmin; line-height: 1; }
+    #fire-overlay .fo-title {
+      font-size: 8.5vmin;
+      font-weight: 800;
+      margin: 2vmin 0 1vmin;
+      letter-spacing: -0.01em;
+    }
+    #fire-overlay .fo-unit { font-size: 4vmin; opacity: 0.92; }
+    #fire-overlay .fo-steps {
+      font-size: 3.4vmin;
+      line-height: 1.75;
+      margin: 4vmin 0 2vmin;
+      padding: 0;
+      max-width: 92vw;
+    }
+    #fire-overlay .fo-steps li { list-style: none; margin: 1vmin 0; }
+    #fire-overlay .fo-countdown {
+      font-size: 3.8vmin;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 3vmin;
+      min-height: 1.2em;
+    }
+    #fire-overlay .fo-btn {
+      font-size: 4.4vmin;
+      font-weight: 700;
+      padding: 2.6vmin 8vmin;
+      border: 3px solid rgba(255, 255, 255, 0.92);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      cursor: pointer;
+    }
+    #fire-overlay .fo-btn:active { background: rgba(255, 255, 255, 0.3); }
+    #fire-overlay .fo-btn[disabled] { opacity: 0.5; }
+    #fire-overlay .fo-note { font-size: 2.9vmin; opacity: 0.82; margin-top: 3vmin; }
   </style>
 </head>
 <body>
@@ -429,6 +492,179 @@
 
     <footer class="spacer"></footer>
   </div>
+
+  <div id="fire-overlay">
+    <div class="fo-icon">🔥</div>
+    <div class="fo-title">화재 감지</div>
+    <div class="fo-unit"></div>
+    <ul class="fo-steps"></ul>
+    <div class="fo-countdown"></div>
+    <button class="fo-btn" type="button">오경보예요</button>
+    <div class="fo-note"></div>
+  </div>
+
+  <script>
+    // ================= 화재 감지 오버레이 =================
+    // 이 화면(홈 디스플레이)이 담당하는 세대 id. ?unit=101-1203 으로 지정하면 저장된다.
+    (function fireModule() {
+      const params = new URLSearchParams(location.search);
+      if (params.get("unit")) localStorage.setItem("fireUnitId", params.get("unit"));
+      const UNIT_ID = localStorage.getItem("fireUnitId") || "101-1203";
+
+      const overlay = document.getElementById("fire-overlay");
+      const elIcon = overlay.querySelector(".fo-icon");
+      const elTitle = overlay.querySelector(".fo-title");
+      const elUnit = overlay.querySelector(".fo-unit");
+      const elSteps = overlay.querySelector(".fo-steps");
+      const elCountdown = overlay.querySelector(".fo-countdown");
+      const elBtn = overlay.querySelector(".fo-btn");
+      const elNote = overlay.querySelector(".fo-note");
+
+      const WARNING_STEPS = [
+        "가스레인지·전열기구 주변을 확인하세요",
+        "이상이 없으면 아래 버튼을 눌러 주세요",
+      ];
+      const ALARM_STEPS = [
+        "🚪 지금 바로 대피하세요",
+        "📞 119에 신고하세요",
+        "🚶 엘리베이터 대신 계단을 이용하세요",
+        "🧣 젖은 수건으로 코와 입을 막으세요",
+      ];
+
+      let status = "normal";
+      let escalateAt = null;   // 서버 시각 기준 ms
+      let serverSkewMs = 0;    // 브라우저시각 - 서버시각
+      let ticker = null;
+
+      // ---- 경보음: 오디오 파일 없이 WebAudio 로 생성 ----
+      let actx = null;
+      let osc = null;
+      let lfo = null;
+      function startSiren(kind) {
+        try {
+          actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+          if (actx.state === "suspended") actx.resume();
+          stopSiren();
+          osc = actx.createOscillator();
+          lfo = actx.createOscillator();
+          const gain = actx.createGain();
+          const lfoGain = actx.createGain();
+          osc.type = "sawtooth";
+          osc.frequency.value = kind === "alarm" ? 680 : 440;
+          lfo.frequency.value = kind === "alarm" ? 4 : 0.5;
+          lfoGain.gain.value = kind === "alarm" ? 230 : 50;
+          gain.gain.value = 0.0001;
+          gain.gain.exponentialRampToValueAtTime(kind === "alarm" ? 0.2 : 0.1, actx.currentTime + 0.2);
+          lfo.connect(lfoGain).connect(osc.frequency);
+          osc.connect(gain).connect(actx.destination);
+          osc.start();
+          lfo.start();
+        } catch (e) { /* 오디오 불가 환경은 무시 */ }
+      }
+      function stopSiren() {
+        for (const node of [osc, lfo]) {
+          try { if (node) { node.stop(); node.disconnect(); } } catch (e) {}
+        }
+        osc = null;
+        lfo = null;
+      }
+
+      let lastSpoke = 0;
+      function speak(text) {
+        try {
+          if (!("speechSynthesis" in window)) return;
+          if (Date.now() - lastSpoke < 7000) return;
+          lastSpoke = Date.now();
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = "ko-KR";
+          speechSynthesis.speak(u);
+        } catch (e) {}
+      }
+
+      // 키오스크가 아닌 브라우저는 사용자 제스처가 있어야 소리가 난다.
+      document.addEventListener("click", () => { try { actx && actx.resume(); } catch (e) {} }, { once: true });
+
+      function renderCountdown() {
+        if (status !== "alarm" || !escalateAt) { elCountdown.textContent = ""; return; }
+        const serverNow = Date.now() - serverSkewMs;
+        const remain = Math.max(0, Math.round((escalateAt - serverNow) / 1000));
+        elCountdown.textContent = `${remain}초 후 관리사무소에 자동으로 통보됩니다`;
+      }
+
+      function apply(unit, serverTime) {
+        if (serverTime) serverSkewMs = Date.now() - new Date(serverTime).getTime();
+        status = unit ? unit.status : "normal";
+        escalateAt = unit && unit.escalate_at ? new Date(unit.escalate_at).getTime() : null;
+
+        overlay.classList.remove("show", "warning", "alarm", "escalated");
+        if (ticker) { clearInterval(ticker); ticker = null; }
+
+        if (!unit || status === "normal" || status === "offline") {
+          stopSiren();
+          return;
+        }
+
+        overlay.classList.add("show", status);
+        elUnit.textContent = unit.label || UNIT_ID;
+        const temp = unit.temperature == null ? "-" : unit.temperature.toFixed(1);
+        elNote.textContent = `현재 온도 ${temp}°C · 불꽃 ${unit.flame ? "감지됨" : "없음"}`;
+
+        if (status === "warning") {
+          elIcon.textContent = "⚠️";
+          elTitle.textContent = "불꽃 또는 고온 감지";
+          elSteps.innerHTML = WARNING_STEPS.map((s) => `<li>${s}</li>`).join("");
+          elBtn.textContent = "확인했어요 · 오경보예요";
+          startSiren("warning");
+        } else {
+          elIcon.textContent = "🔥";
+          elTitle.textContent = status === "escalated" ? "화재 · 관리사무소에 통보됨" : "화재 감지";
+          elSteps.innerHTML = ALARM_STEPS.map((s) => `<li>${s}</li>`).join("");
+          elBtn.textContent = status === "escalated" ? "상황 종료 (오경보였음)" : "오경보예요";
+          startSiren("alarm");
+          speak(
+            status === "escalated"
+              ? "화재가 감지되어 관리사무소에 통보되었습니다. 즉시 대피하세요."
+              : "화재가 감지되었습니다. 즉시 대피하세요."
+          );
+        }
+
+        renderCountdown();
+        ticker = setInterval(renderCountdown, 500);
+      }
+
+      elBtn.addEventListener("click", async () => {
+        elBtn.disabled = true;
+        try {
+          await fetch("/api/fire/cancel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ unit_id: UNIT_ID }),
+          });
+        } catch (e) {}
+        setTimeout(() => { elBtn.disabled = false; }, 1500);
+      });
+
+      function connect() {
+        const es = new EventSource(`/api/fire/stream?unit_id=${encodeURIComponent(UNIT_ID)}`);
+        es.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(ev.data);
+            apply(data.unit, data.server_time);
+          } catch (e) {}
+        };
+        // EventSource 는 스스로 재연결하므로 onerror 는 로깅만.
+      }
+      connect();
+
+      // SSE 가 프록시 등에 막힌 환경 대비 폴백 폴링.
+      setInterval(async () => {
+        try {
+          const r = await fetch(`/api/fire/state?unit_id=${encodeURIComponent(UNIT_ID)}`);
+          if (r.ok) { const d = await r.json(); apply(d.unit, d.server_time); }
+        } catch (e) {}
+      }, 7000);
+    })();
+  </script>
 
   <script>
     const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
