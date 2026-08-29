@@ -36,9 +36,14 @@ class Settings(BaseSettings):
     fire_temp_threshold_c: float = 50.0
     # "오경보예요" 취소 후 같은 잔여 신호로 즉시 재경보되지 않도록 무시하는 쿨다운(초).
     fire_cancel_cooldown_seconds: int = 60
-    # 관리사무소 화면에 미리 등록해둘 세대 목록. "아이디|표시이름" 을 콤마로 구분.
-    # 비워두면 첫 보고 시 자동 등록. 데모에서 그리드가 비어보이지 않도록 기본 3세대를 넣어둔다.
-    fire_units: str = "101-1203|101동 1203호,101-1204|101동 1204호,102-0901|102동 901호"
+    # 관리사무소 화면에 자동으로 채워 넣을 단지 구조: 동 목록 x 층수 x 층당 세대수.
+    # 호수는 "층*100 + 라인" 규칙으로 생성 (예: 3층 2호 -> 302호). 기본값: 101~103동, 12층, 층당 2세대.
+    fire_buildings: str = "101,102,103"
+    fire_floors: int = 12
+    fire_units_per_floor: int = 2
+    # 위 자동 생성 외에 개별로 추가/덮어쓸 세대. "아이디|표시이름" 을 콤마로 구분.
+    # 예: "101-9999|관리사무소 테스트". 보통은 비워둔다.
+    fire_units: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

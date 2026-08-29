@@ -505,11 +505,11 @@
 
   <script>
     // ================= 화재 감지 오버레이 =================
-    // 이 화면(홈 디스플레이)이 담당하는 세대 id. ?unit=101-1203 으로 지정하면 저장된다.
+    // 이 화면(홈 디스플레이)이 담당하는 세대 id. ?unit=101-302 로 지정하면 저장된다(동-호수).
     (function fireModule() {
       const params = new URLSearchParams(location.search);
       if (params.get("unit")) localStorage.setItem("fireUnitId", params.get("unit"));
-      const UNIT_ID = localStorage.getItem("fireUnitId") || "101-1203";
+      const UNIT_ID = localStorage.getItem("fireUnitId") || "101-302";
 
       const overlay = document.getElementById("fire-overlay");
       const elIcon = overlay.querySelector(".fo-icon");

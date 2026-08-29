@@ -6,8 +6,8 @@
 
 환경변수 (.env 또는 셸):
     FIRE_BACKEND_URL   기본 http://localhost:8000
-    FIRE_UNIT_ID       기본 101-1203        (관리사무소가 식별하는 세대 id)
-    FIRE_UNIT_LABEL    기본 없음            (예: "101동 1203호")
+    FIRE_UNIT_ID       기본 101-302         (관리사무소가 식별하는 세대 id. "동-호수")
+    FIRE_UNIT_LABEL    기본 없음            (예: "101동 302호")
     FIRE_TOKEN         기본 없음            (백엔드 FIRE_TOKEN 과 일치해야 함)
     FIRE_FLAME_GPIO    기본 4
     FIRE_REPORT_INTERVAL  기본 1.0 (초)
@@ -27,7 +27,7 @@ except Exception:
     pass
 
 BACKEND_URL = os.environ.get("FIRE_BACKEND_URL", "http://localhost:8000").rstrip("/")
-UNIT_ID = os.environ.get("FIRE_UNIT_ID", "101-1203")
+UNIT_ID = os.environ.get("FIRE_UNIT_ID", "101-302")
 UNIT_LABEL = os.environ.get("FIRE_UNIT_LABEL") or None
 TOKEN = os.environ.get("FIRE_TOKEN", "")
 FLAME_GPIO = int(os.environ.get("FIRE_FLAME_GPIO", "4"))

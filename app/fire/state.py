@@ -79,6 +79,16 @@ class FireManager:
         self._seed_units()
 
     def _seed_units(self) -> None:
+        # 단지 구조(동 x 층 x 층당세대)로 자동 생성. 호수는 "층*100 + 라인" 규칙(예: 3층 2호 -> 302호).
+        buildings = [b.strip() for b in (settings.fire_buildings or "").split(",") if b.strip()]
+        for building in buildings:
+            for floor in range(1, settings.fire_floors + 1):
+                for line in range(1, settings.fire_units_per_floor + 1):
+                    unit_no = floor * 100 + line
+                    uid = f"{building}-{unit_no}"
+                    self._units[uid] = UnitState(unit_id=uid, label=f"{building}동 {unit_no}호")
+
+        # 자동 생성 외에 개별로 추가/덮어쓸 세대.
         for chunk in (settings.fire_units or "").split(","):
             chunk = chunk.strip()
             if not chunk:
