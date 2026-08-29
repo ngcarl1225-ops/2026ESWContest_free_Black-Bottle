@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
+from app.services._http import get_json_with_retry, ttl_cache
 from config.settings import settings
 
 BASE_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst"
@@ -90,6 +91,7 @@ def _extract_hourly(grouped: dict[tuple[str, str], dict[str, str]], count: int =
     return hourly
 
 
+@ttl_cache(30)
 async def get_short_term_forecast() -> dict:
     if settings.use_mock_data or not settings.kma_service_key:
         return _mock_forecast()
@@ -107,11 +109,7 @@ async def get_short_term_forecast() -> dict:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(BASE_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
+        data = await get_json_with_retry(BASE_URL, params)
         items = data["response"]["body"]["items"]["item"]
 
         # (fcstDate, fcstTime) 기준 시간순 정렬 후 가장 이른 시각의 값을 "현재" 값으로 사용

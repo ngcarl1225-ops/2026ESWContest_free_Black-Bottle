@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 import httpx
 
+from app.services._http import get_json_with_retry, ttl_cache
 from config.settings import settings
 
 # 생활기상지수 조회서비스(3.0) 자외선지수 - 활용신청 상세기능정보 기준 실제 엔드포인트(V5)
@@ -35,6 +36,7 @@ def _latest_report_time(now: datetime | None = None) -> str:
     return base.strftime("%Y%m%d%H")
 
 
+@ttl_cache(30)
 async def get_uv_index() -> dict:
     if settings.use_mock_data or not settings.kma_service_key:
         return _mock_uv()
@@ -47,11 +49,7 @@ async def get_uv_index() -> dict:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(BASE_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
+        data = await get_json_with_retry(BASE_URL, params)
         item = data["response"]["body"]["items"]["item"][0]
         # 응답 필드명은 시간대별 지수(h0, h3, h6 ...)로 내려오므로 가장 이른 시각값 사용
         value = int(item.get("h0", 0))

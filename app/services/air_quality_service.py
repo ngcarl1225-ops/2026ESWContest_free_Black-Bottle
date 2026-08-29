@@ -1,5 +1,6 @@
 import httpx
 
+from app.services._http import get_json_with_retry, ttl_cache
 from config.settings import settings
 
 BASE_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty"
@@ -47,6 +48,7 @@ def _resolve_grade(item: dict) -> str:
     return "정보없음"
 
 
+@ttl_cache(30)
 async def get_air_quality() -> dict:
     if settings.use_mock_data or not settings.airkorea_service_key:
         return _mock_air_quality()
@@ -62,11 +64,7 @@ async def get_air_quality() -> dict:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(BASE_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
+        data = await get_json_with_retry(BASE_URL, params)
         items = data["response"]["body"]["items"]
 
         # 통신장애로 가장 최근 시간대의 PM10/PM2.5가 비어있는 경우가 있어,
