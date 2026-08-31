@@ -202,10 +202,12 @@ class FireManager:
             return None
         flame, temp = preset
         if scenario == "clear":
+            # 데모 리셋은 "오경보 취소"가 아니라 완전 초기화라서 쿨다운을 걸지 않는다 -
+            # 걸면 이 직후 [화재경보]를 다시 눌러도 쿨다운 때문에 정상으로 눌려있게 된다.
             async with self._lock:
                 unit = self._units.get(unit_id)
                 if unit:
-                    self._mute_and_clear(unit)
+                    self._hard_reset(unit)
         return await self.report(unit_id, flame, temp, label=label)
 
     # ---------- 내부 로직 ----------
@@ -215,6 +217,14 @@ class FireManager:
         unit.alarm_since = None
         unit.escalate_at = None
         unit.admin_ack = None
+        self._cancel_escalation(unit.unit_id)
+
+    def _hard_reset(self, unit: UnitState) -> None:
+        unit.status = NORMAL
+        unit.alarm_since = None
+        unit.escalate_at = None
+        unit.admin_ack = None
+        unit.muted_until = None
         self._cancel_escalation(unit.unit_id)
 
     def _recompute(self, unit: UnitState) -> None:
