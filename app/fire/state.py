@@ -26,6 +26,11 @@ ALARM = "alarm"
 ESCALATED = "escalated"
 OFFLINE = "offline"
 
+# 위험도 순서. 완화되는 방향(숫자가 줄어드는 쪽)의 전이만 디바운스 대상이 된다 - 라이터
+# 불꽃처럼 순간적으로 깜빡이는 신호에 정상<->주의가 계속 반복되며 사이렌이 매번 끊겼다
+# 다시 켜지는 걸 막기 위함. 위험해지는 방향은 안전을 위해 언제나 즉시 반영한다.
+SEVERITY_RANK = {NORMAL: 0, WARNING: 1, ALARM: 2, ESCALATED: 3}
+
 ACK_ACTIONS = {"checking", "called_119", "resolved"}
 SIM_PRESETS = {
     "warning": (True, 30.0),
@@ -54,6 +59,8 @@ class UnitState:
     escalate_at: datetime | None = None
     admin_ack: str | None = None            # checking | called_119 | None
     muted_until: datetime | None = None
+    pending_status: str | None = None       # 완화 방향 전이 디바운스용 (내부 전용, to_dict에 안 나감)
+    pending_since: datetime | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -217,6 +224,8 @@ class FireManager:
         unit.alarm_since = None
         unit.escalate_at = None
         unit.admin_ack = None
+        unit.pending_status = None
+        unit.pending_since = None
         self._cancel_escalation(unit.unit_id)
 
     def _hard_reset(self, unit: UnitState) -> None:
@@ -225,6 +234,8 @@ class FireManager:
         unit.escalate_at = None
         unit.admin_ack = None
         unit.muted_until = None
+        unit.pending_status = None
+        unit.pending_since = None
         self._cancel_escalation(unit.unit_id)
 
     def _recompute(self, unit: UnitState) -> None:
@@ -257,8 +268,30 @@ class FireManager:
             new = ESCALATED
 
         if new == prev:
+            unit.pending_status = None
+            unit.pending_since = None
             return
 
+        # 위험해지는 방향(정상->주의->경보)은 안전을 위해 즉시 반영한다.
+        # 완화되는 방향(경보->주의->정상)은 라이터 불꽃 같은 순간적 깜빡임 때문에
+        # 화면/사이렌이 계속 껐다 켜졌다 하지 않도록, 그 값이 fire_debounce_seconds 동안
+        # 안정적으로 유지될 때만 반영한다. muted/offline 전이는 디바운스하지 않는다.
+        cooling_down = (
+            not muted
+            and new != OFFLINE
+            and prev != OFFLINE
+            and SEVERITY_RANK.get(new, 0) < SEVERITY_RANK.get(prev, 0)
+        )
+        if cooling_down:
+            if unit.pending_status != new:
+                unit.pending_status = new
+                unit.pending_since = now
+                return
+            if (now - unit.pending_since).total_seconds() < settings.fire_debounce_seconds:
+                return  # 아직 안정화 대기 중 - 이전 상태 유지
+
+        unit.pending_status = None
+        unit.pending_since = None
         unit.status = new
         self._on_transition(unit, new)
 
