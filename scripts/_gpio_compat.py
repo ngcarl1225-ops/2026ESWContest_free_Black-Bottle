@@ -27,11 +27,16 @@ def rp1_chip_name() -> str:
 
 
 class DigitalPin:
-    """gpiozero.DigitalInputDevice 대체품. `.is_active`만 흉내낸다(이 프로젝트에서 쓰는 전부)."""
+    """gpiozero.DigitalInputDevice 대체품. `.is_active`만 흉내낸다(이 프로젝트에서 쓰는 전부).
 
-    def __init__(self, bcm_pin: int, chip: str | None = None):
+    active_low=True 면 "핀이 LOW일 때 활성"으로 뒤집어서 해석한다 - 코드가 데이터시트 없이
+    실측으로 확인한 이 불꽃센서 모듈처럼 평상시 HIGH, 감지 시 LOW로 동작하는 센서용.
+    """
+
+    def __init__(self, bcm_pin: int, chip: str | None = None, active_low: bool = False):
         self.chip = chip or rp1_chip_name()
         self.pin = bcm_pin
+        self.active_low = active_low
 
     @property
     def is_active(self) -> bool:
@@ -42,6 +47,7 @@ class DigitalPin:
                 text=True,
                 timeout=2,
             )
-            return out.stdout.strip() == "1"
+            raw_high = out.stdout.strip() == "1"
         except Exception:
             return False
+        return (not raw_high) if self.active_low else raw_high

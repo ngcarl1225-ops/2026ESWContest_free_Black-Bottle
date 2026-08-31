@@ -2,8 +2,8 @@ from time import sleep
 
 from _gpio_compat import DigitalPin
 
-# GPIO 4번 핀을 입력 핀으로 설정
-sensor = DigitalPin(4)
+# GPIO 4번 핀을 입력 핀으로 설정. 이 센서 모듈은 실측 결과 평상시 HIGH, 불꽃 감지 시 LOW.
+sensor = DigitalPin(4, active_low=True)
 
 print("센서 작동 시작...")
 

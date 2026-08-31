@@ -10,6 +10,7 @@
     FIRE_UNIT_LABEL    기본 없음            (예: "101동 302호")
     FIRE_TOKEN         기본 없음            (백엔드 FIRE_TOKEN 과 일치해야 함)
     FIRE_FLAME_GPIO    기본 4
+    FIRE_FLAME_ACTIVE_LOW  기본 true  (이 센서 모듈 실측: 평상시 HIGH, 불꽃 감지 시 LOW)
     FIRE_REPORT_INTERVAL  기본 1.0 (초)
 """
 import glob
@@ -32,12 +33,13 @@ UNIT_ID = os.environ.get("FIRE_UNIT_ID", "101-302")
 UNIT_LABEL = os.environ.get("FIRE_UNIT_LABEL") or None
 TOKEN = os.environ.get("FIRE_TOKEN", "")
 FLAME_GPIO = int(os.environ.get("FIRE_FLAME_GPIO", "4"))
+FLAME_ACTIVE_LOW = os.environ.get("FIRE_FLAME_ACTIVE_LOW", "true").strip().lower() not in ("0", "false", "no")
 INTERVAL = float(os.environ.get("FIRE_REPORT_INTERVAL", "1.0"))
 
 REPORT_ENDPOINT = f"{BACKEND_URL}/api/fire/report"
 
-# 불꽃 센서(C57) DO 핀
-flame_sensor = DigitalPin(FLAME_GPIO)
+# 불꽃 센서(C57) DO 핀 - 실측 결과 평상시 HIGH, 불꽃 감지 시 LOW(active-low)
+flame_sensor = DigitalPin(FLAME_GPIO, active_low=FLAME_ACTIVE_LOW)
 
 
 def find_ds18b20_path():
