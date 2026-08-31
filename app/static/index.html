@@ -540,6 +540,17 @@
       let actx = null;
       let osc = null;
       let lfo = null;
+      let sirenKind = null; // 현재 재생 중인 사이렌 종류(null이면 정지 상태). 같은 종류면 재시작하지 않는다.
+
+      // apply()는 센서가 보고할 때마다(대략 매초) 호출되는데, 그때마다 startSiren을 부르면
+      // 오실레이터를 죽였다 새로 만들면서 0.2초 페이드인이 반복돼 소리가 1초마다 끊기는 것처럼 들린다.
+      // 종류가 안 바뀌었으면 이미 돌고 있는 사이렌을 그대로 둔다.
+      function ensureSiren(kind) {
+        if (sirenKind === kind) return;
+        startSiren(kind);
+        sirenKind = kind;
+      }
+
       function startSiren(kind) {
         try {
           actx = actx || new (window.AudioContext || window.webkitAudioContext)();
@@ -567,6 +578,7 @@
         }
         osc = null;
         lfo = null;
+        sirenKind = null;
       }
 
       let lastSpoke = 0;
@@ -614,13 +626,13 @@
           elTitle.textContent = "불꽃 또는 고온 감지";
           elSteps.innerHTML = WARNING_STEPS.map((s) => `<li>${s}</li>`).join("");
           elBtn.textContent = "확인했어요 · 오경보예요";
-          startSiren("warning");
+          ensureSiren("warning");
         } else {
           elIcon.textContent = "🔥";
           elTitle.textContent = status === "escalated" ? "화재 · 관리사무소에 통보됨" : "화재 감지";
           elSteps.innerHTML = ALARM_STEPS.map((s) => `<li>${s}</li>`).join("");
           elBtn.textContent = status === "escalated" ? "상황 종료 (오경보였음)" : "오경보예요";
-          startSiren("alarm");
+          ensureSiren("alarm");
           speak(
             status === "escalated"
               ? "화재가 감지되어 관리사무소에 통보되었습니다. 즉시 대피하세요."
