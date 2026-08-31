@@ -17,7 +17,8 @@ import os
 from time import sleep
 
 import httpx
-from gpiozero import DigitalInputDevice
+
+from _gpio_compat import DigitalPin
 
 try:
     from dotenv import load_dotenv
@@ -36,7 +37,7 @@ INTERVAL = float(os.environ.get("FIRE_REPORT_INTERVAL", "1.0"))
 REPORT_ENDPOINT = f"{BACKEND_URL}/api/fire/report"
 
 # 불꽃 센서(C57) DO 핀
-flame_sensor = DigitalInputDevice(FLAME_GPIO)
+flame_sensor = DigitalPin(FLAME_GPIO)
 
 
 def find_ds18b20_path():
@@ -50,6 +51,9 @@ def find_ds18b20_path():
 def read_temperature_c(device_path):
     with open(device_path) as f:
         lines = f.readlines()
+
+    if len(lines) < 2:
+        return None  # 1-Wire 타이밍 이슈 등으로 파일 내용이 비거나 잘린 경우, 이번 측정은 건너뜀
 
     if not lines[0].strip().endswith("YES"):
         return None  # CRC 실패, 이번 측정은 건너뜀

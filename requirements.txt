@@ -4,5 +4,8 @@ python-dotenv==1.0.1
 pydantic-settings==2.7.0
 httpx==0.28.1
 pyyaml==6.0.2
-gpiozero==2.0.1
-lgpio==0.2.2.0
+# gpiozero/lgpio는 더 이상 scripts/에서 쓰지 않는다 - pip의 lgpio==0.2.2.0이 이 Pi 5의
+# gpiochip(RP1, /dev/gpiochip15)을 여는 데 재현 가능하게 실패해서(scripts/_gpio_compat.py 참고),
+# 디지털 입력 핀은 시스템에 이미 있는 libgpiod CLI(gpioget, apt: gpiod)로 대신 읽는다.
+# gpiozero==2.0.1
+# lgpio==0.2.2.0

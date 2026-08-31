@@ -1,8 +1,9 @@
-from gpiozero import DigitalInputDevice
 from time import sleep
 
+from _gpio_compat import DigitalPin
+
 # MQ-2 가스/연기 센서 DO 핀을 GPIO 11번에 연결
-sensor = DigitalInputDevice(11)
+sensor = DigitalPin(11)
 
 print("가스/연기 센서 작동 시작...")
 
@@ -16,4 +17,3 @@ while True:
         print(f"정상 {n}")
 
     sleep(1)  # 1초마다 반복해서 확인
-    

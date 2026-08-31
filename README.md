@@ -148,6 +148,11 @@ DS18B20은 1-Wire(`dtoverlay=w1-gpio,gpiopin=17`)로 연결하면 커널이 `/sy
 연결 직후 `ls /sys/bus/w1/devices/ | grep ^28-`로 잡히는지 먼저 확인할 것 (안 잡히면 스크립트가 시작하자마자 에러로 종료됨).
 불꽃 센서 DO는 기본 GPIO4(`FIRE_FLAME_GPIO`로 변경 가능). 백엔드 연결이 끊겨도 스크립트는 죽지 않고 재시도한다.
 
+**디지털 입력 핀은 gpiozero가 아니라 `scripts/_gpio_compat.py`(libgpiod의 `gpioget` CLI 호출)로 읽는다.**
+Pi 5(RP1)에서 pip의 `lgpio` 패키지가 이 칩을 여는 데 재현 가능하게 실패하는 경우가 있어서 우회한 것.
+`gpioget`/`gpiodetect`가 없으면 `sudo apt install gpiod`로 설치. Pi 4 이하에서도 그대로 동작한다
+(`gpiodetect`가 `pinctrl-rp1` 라벨을 못 찾으면 `gpiochip0`으로 폴백).
+
 ## 프로젝트 구조
 
 ```
